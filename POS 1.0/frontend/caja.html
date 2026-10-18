@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Caja - PDV</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background-color: #f9f9f9; }
+        .caja-container { max-width: 900px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .input-group { margin-bottom: 20px; }
+        input[type="text"], input[type="number"], textarea { padding: 10px; width: 100%; font-size: 16px; box-sizing: border-box; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background-color: #007bff; color: white; }
+        .total-container { text-align: right; margin-top: 20px; font-size: 24px; font-weight: bold; }
+        
+        /* ESTILOS DE VENTANAS EMERGENTES (MODALS) */
+        .modal-overlay { 
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.8); align-items: center; justify-content: center; z-index: 1000; 
+        }
+        .modal-contenido { background: white; padding: 25px; width: 400px; border-radius: 8px; }
+        
+        /* ESTILOS DEL TICKET DIGITAL */
+        .ticket-contenido { 
+            background: white; padding: 20px; width: 300px; 
+            font-family: 'Courier New', Courier, monospace; 
+            font-size: 14px; color: black;
+        }
+        @media print {
+            body * { visibility: hidden; }
+            #area-impresion, #area-impresion * { visibility: visible; }
+            #area-impresion { position: absolute; left: 0; top: 0; width: 100%; padding: 0; margin: 0; }
+            .no-imprimir { display: none !important; } 
+        }
+    </style>
+</head>
+<body>
+
+    <div class="caja-container">
+        <!-- ENCABEZADO CON BOTONES -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #eee; padding-bottom: 10px;">
+            <h2 style="margin: 0;">Caja - <span id="nombre-cajero" style="color: #007bff;"></span></h2>
+            <div>
+                <!-- NUEVO BOTÓN: BUZÓN -->
+                <button onclick="abrirBuzon()" style="background-color: #17a2b8; color: white; border: none; padding: 8px 15px; cursor: pointer; border-radius: 4px; font-weight: bold; margin-right: 10px;">📥 Buzón/Sugerencias</button>
+                <button onclick="generarCorte()" style="background-color: #ffc107; color: black; border: none; padding: 8px 15px; cursor: pointer; border-radius: 4px; font-weight: bold; margin-right: 10px;">Corte de Caja</button>
+                <button onclick="cerrarSesion()" style="background-color: #dc3545; color: white; border: none; padding: 8px 15px; cursor: pointer; border-radius: 4px; font-weight: bold;">Cerrar Sesión</button>
+            </div>
+        </div>
+        
+        <!-- BÚSQUEDA DE PRODUCTOS -->
+        <div class="input-group">
+            <label for="codigo">Código de Barras:</label>
+            <input type="text" id="codigo" autofocus placeholder="Escanea o escribe y presiona Enter">
+        </div>
+
+        <!-- TABLA DEL TICKET -->
+        <table>
+            <thead>
+                <tr>
+                    <th>Código</th>
+                    <th>Nombre</th>
+                    <th style="text-align: center;">Cantidad</th>
+                    <th>Precio Unit.</th>
+                    <th>Subtotal</th>
+                    <th style="width: 50px; text-align: center;">Acción</th>
+                </tr>
+            </thead>
+            <tbody id="lista-ticket"></tbody>
+        </table>
+
+        <!-- TOTALES -->
+        <div class="total-container">
+            <div>Total Efectivo: $<span id="total-venta" style="color: #28a745;">0.00</span></div>
+            <div style="font-size: 16px; color: #6c757d; margin-top: 5px;">
+                En caso de pago con tarjeta (+4%): $<span id="total-tarjeta">0.00</span>
+            </div>
+        </div>
+        
+        <!-- BOTONES DE COBRO -->
+        <div style="display: flex; gap: 10px; margin-top: 15px;">
+            <button onclick="prepararCobroEfectivo()" style="flex: 1; padding: 15px; font-size: 18px; background-color: #28a745; color: white; border: none; cursor: pointer; border-radius: 4px;">💵 Cobrar en Efectivo</button>
+            <button onclick="ejecutarVenta('tarjeta')" style="flex: 1; padding: 15px; font-size: 18px; background-color: #007bff; color: white; border: none; cursor: pointer; border-radius: 4px;">💳 Cobrar con Tarjeta (+4%)</button>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MODAL: CALCULAR CAMBIO (EFECTIVO)          -->
+    <!-- ========================================== -->
+    <div class="modal-overlay" id="modal-efectivo">
+        <div class="modal-contenido">
+            <h3 style="margin-top:0;">Cobro en Efectivo</h3>
+            <p style="font-size: 20px;">Total a Cobrar: <strong style="color:#28a745;">$<span id="efectivo-total">0.00</span></strong></p>
+            
+            <label style="font-weight: bold;">Efectivo Recibido:</label>
+            <input type="number" id="efectivo-recibido" placeholder="Ej. 500" style="margin-bottom: 15px; font-size: 20px;" oninput="calcularCambio()">
+            
+            <p style="font-size: 20px;">Cambio a entregar: <strong style="color:#dc3545;">$<span id="efectivo-cambio">0.00</span></strong></p>
+            
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+                <button onclick="cerrarModalEfectivo()" style="padding: 10px 15px; cursor: pointer;">Cancelar</button>
+                <button id="btn-confirmar-efectivo" onclick="confirmarEfectivo()" style="padding: 10px 15px; background: #28a745; color: white; border: none; cursor: pointer; border-radius: 4px; font-weight: bold;" disabled>Confirmar Venta</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MODAL: BUZÓN DE SUGERENCIAS                -->
+    <!-- ========================================== -->
+    <div class="modal-overlay" id="modal-buzon">
+        <div class="modal-contenido">
+            <h3 style="margin-top:0;">Buzón de Quejas y Sugerencias</h3>
+            <p style="font-size: 14px; color: #666;">Este mensaje se enviará directamente a administración de forma 100% anónima.</p>
+            <textarea id="texto-buzon" rows="5" placeholder="Escribe aquí tu queja o sugerencia..."></textarea>
+            
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px;">
+                <button onclick="document.getElementById('modal-buzon').style.display='none'" style="padding: 10px 15px; cursor: pointer;">Cancelar</button>
+                <button onclick="enviarQueja()" style="padding: 10px 15px; background: #17a2b8; color: white; border: none; cursor: pointer; border-radius: 4px;">Enviar Anónimo</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MODAL: TICKET DIGITAL                      -->
+    <!-- ========================================== -->
+    <div class="modal-overlay" id="modal-ticket">
+        <div class="ticket-contenido" id="area-impresion">
+            <h2 style="margin: 0; text-align: center;">MI TIENDA</h2>
+            <p style="margin: 5px 0; font-size: 12px; text-align: center;">Ticket de Compra</p>
+            <p style="margin: 5px 0; font-size: 12px;">Fecha: <span id="ticket-fecha"></span></p>
+            <p style="margin: 5px 0; font-size: 12px;">Cajero: <span id="ticket-cajero"></span></p>
+            <p style="margin: 5px 0; font-size: 12px;">Venta #: <span id="ticket-id"></span></p>
+            
+            <hr style="border-top: 1px dashed black; margin: 10px 0;">
+            <table style="width: 100%; font-size: 12px; margin-top: 0; border: none;">
+                <tbody id="ticket-items"></tbody>
+            </table>
+            <hr style="border-top: 1px dashed black; margin: 10px 0;">
+            
+            <h3 style="margin: 5px 0; text-align: right;">TOTAL: $<span id="ticket-total"></span></h3>
+            <p style="font-size: 12px; text-align: right; margin: 0;">Método: <span id="ticket-metodo"></span></p>
+            
+            <!-- Nuevos campos para el cambio (Se muestran solo en efectivo) -->
+            <div id="ticket-desglose-efectivo" style="display: none; text-align: right; font-size: 12px;">
+                <p style="margin: 2px 0;">Recibido: $<span id="ticket-recibido"></span></p>
+                <p style="margin: 2px 0;">Cambio: $<span id="ticket-cambio"></span></p>
+            </div>
+            
+            <p style="margin-top: 20px; font-size: 12px; text-align: center;">¡Gracias por su compra!</p>
+            
+            <div class="no-imprimir" style="margin-top: 20px; display: flex; justify-content: space-between;">
+                <button onclick="window.print()" style="background: #007bff; color: white; border: none; padding: 10px; cursor: pointer; font-weight: bold;">🖨️ Imprimir</button>
+                <button onclick="cerrarTicket()" style="background: #28a745; color: white; border: none; padding: 10px; cursor: pointer; font-weight: bold;">✅ Listo</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- LÓGICA JAVASCRIPT                          -->
+    <!-- ========================================== -->
+    <script>
+        // 1. SEGURIDAD
+        const usuarioGuardado = sessionStorage.getItem('usuarioActivo');
+        let usuarioActivo;
+        if (!usuarioGuardado) window.location.href = 'login.html'; 
+        else {
+            usuarioActivo = JSON.parse(usuarioGuardado);
+            document.getElementById('nombre-cajero').innerText = usuarioActivo.nombre;
+        }
+
+        function cerrarSesion() {
+            sessionStorage.removeItem('usuarioActivo'); 
+            window.location.href = 'login.html'; 
+        }
+
+        // 2. LÓGICA DEL CARRITO
+        let total = 0;
+        let carrito = []; 
+
+        document.getElementById('codigo').addEventListener('keypress', async function(e) {
+            if (e.key === 'Enter') {
+                const codigoInput = this.value;
+                if (!codigoInput) return;
+
+                try {
+                    const respuesta = await fetch(`http://127.0.0.1:8000/api/productos/${codigoInput}`);
+                    const datos = await respuesta.json();
+
+                    if (datos.encontrado) {
+                        // --- ALERTA DE STOCK 0 ---
+                        if (datos.producto.stock <= 0) {
+                            const confirmar = confirm(`⚠️ ADVERTENCIA: El sistema marca 0 stock para "${datos.producto.nombre}".\n\n¿Estás seguro de que lo tienes físicamente y deseas venderlo?`);
+                            if (!confirmar) {
+                                this.value = '';
+                                return; 
+                            }
+                        }
+
+                        // --- NUEVA LÓGICA: AGRUPAR PRODUCTOS ---
+                        let indexExistente = carrito.findIndex(item => item.codigo === datos.producto.codigo_barras);
+
+                        if (indexExistente !== -1) {
+                            carrito[indexExistente].cantidad += 1;
+                        } else {
+                            carrito.push({
+                                codigo: datos.producto.codigo_barras,
+                                nombre: datos.producto.nombre,
+                                descripcion: datos.producto.descripcion,
+                                precio: parseFloat(datos.producto.precio_venta),
+                                cantidad: 1 // <-- Vital para que Python no marque "undefined"
+                            });
+                        }
+                        
+                        actualizarPantallaTicket();
+                        this.value = '';
+                    } else {
+                        alert("Producto no registrado");
+                        this.value = '';
+                    }
+                } catch (error) { console.error("Error:", error); }
+            }
+        });
+
+        // --- DIBUJAR Y ELIMINAR DEL TICKET ---
+        function actualizarPantallaTicket() {
+            const tbody = document.getElementById('lista-ticket');
+            tbody.innerHTML = '';
+            total = 0;
+
+            carrito.forEach((item, index) => {
+                let subtotalFila = item.precio * item.cantidad;
+                total += subtotalFila; 
+                
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${item.codigo}</td>
+                        <td>${item.nombre}</td>
+                        <td style="font-weight: bold; color: #007bff; text-align: center;">${item.cantidad}</td>
+                        <td>$${item.precio.toFixed(2)}</td>
+                        <td style="font-weight: bold;">$${subtotalFila.toFixed(2)}</td>
+                        <td style="text-align: center;">
+                            <button onclick="eliminarProducto(${index})" style="background: #dc3545; color: white; border: none; padding: 5px; cursor: pointer; border-radius: 3px;" title="Quitar todo el producto">🗑️</button>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            document.getElementById('total-venta').innerText = total.toFixed(2);
+            document.getElementById('total-tarjeta').innerText = (total * 1.04).toFixed(2);
+        }
+
+        function eliminarProducto(index) {
+            carrito.splice(index, 1); 
+            actualizarPantallaTicket();
+        }
+
+        // 3. LÓGICA DE COBRO (EFECTIVO Y TARJETA)
+        var datosCajaEfectivo = { recibido: 0, cambio: 0 };
+
+        function prepararCobroEfectivo() {
+            if (carrito.length === 0) return alert("El ticket está vacío.");
+            document.getElementById('efectivo-total').innerText = total.toFixed(2);
+            document.getElementById('efectivo-recibido').value = '';
+            document.getElementById('efectivo-cambio').innerText = '0.00';
+            document.getElementById('btn-confirmar-efectivo').disabled = true;
+            document.getElementById('btn-confirmar-efectivo').style.opacity = '0.5';
+            
+            document.getElementById('modal-efectivo').style.display = 'flex';
+            setTimeout(() => document.getElementById('efectivo-recibido').focus(), 100);
+        }
+
+        function calcularCambio() {
+            const recibido = parseFloat(document.getElementById('efectivo-recibido').value) || 0;
+            const cambio = recibido - total;
+            document.getElementById('efectivo-cambio').innerText = cambio > 0 ? cambio.toFixed(2) : "0.00";
+            
+            const btn = document.getElementById('btn-confirmar-efectivo');
+            if (cambio < 0) {
+                btn.disabled = true; btn.style.opacity = '0.5';
+            } else {
+                btn.disabled = false; btn.style.opacity = '1';
+            }
+        }
+
+        function cerrarModalEfectivo() {
+            document.getElementById('modal-efectivo').style.display = 'none';
+        }
+
+        function confirmarEfectivo() {
+            const recibido = parseFloat(document.getElementById('efectivo-recibido').value) || 0;
+            const cambio = recibido - total;
+            datosCajaEfectivo = { recibido: recibido, cambio: cambio };
+            cerrarModalEfectivo();
+            ejecutarVenta('efectivo');
+        }
+
+        async function ejecutarVenta(metodoPago) {
+            if (carrito.length === 0) return alert("El ticket está vacío.");
+
+            let totalCobrado = metodoPago === 'tarjeta' ? (total * 1.04) : total;
+
+            const datosVenta = {
+                id_empleado: usuarioActivo.id_usuario, 
+                total: parseFloat(totalCobrado.toFixed(2)),
+                metodo_pago: metodoPago,
+                items: carrito.map(item => ({ codigo: item.codigo, cantidad: item.cantidad, precio: item.precio }))
+            };
+
+            try {
+                const respuesta = await fetch('http://127.0.0.1:8000/api/ventas', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(datosVenta)
+                });
+                const resultado = await respuesta.json();
+
+                // Si FastAPI contesta con éxito
+                if (respuesta.ok && resultado.exito) {
+                    // Llenar ticket
+                    document.getElementById('ticket-fecha').innerText = new Date().toLocaleString();
+                    document.getElementById('ticket-cajero').innerText = usuarioActivo.nombre;
+                    document.getElementById('ticket-id').innerText = resultado.id_venta;
+                    document.getElementById('ticket-metodo').innerText = metodoPago.toUpperCase();
+                    document.getElementById('ticket-total').innerText = parseFloat(totalCobrado).toFixed(2);
+                    
+                    if (metodoPago === 'efectivo') {
+                        document.getElementById('ticket-desglose-efectivo').style.display = 'block';
+                        document.getElementById('ticket-recibido').innerText = datosCajaEfectivo.recibido.toFixed(2);
+                        document.getElementById('ticket-cambio').innerText = datosCajaEfectivo.cambio.toFixed(2);
+                    } else {
+                        document.getElementById('ticket-desglose-efectivo').style.display = 'none';
+                    }
+
+                    const tbodyTicket = document.getElementById('ticket-items');
+                    tbodyTicket.innerHTML = '';
+                    carrito.forEach(item => {
+                        let subtotal = item.precio * item.cantidad;
+                        tbodyTicket.innerHTML += `
+                            <tr>
+                                <td style="border: none; padding: 2px 0;">${item.cantidad}x ${item.nombre.substring(0,12)}</td>
+                                <td style="border: none; padding: 2px 0; text-align: right;">$${subtotal.toFixed(2)}</td>
+                            </tr>
+                        `;
+                    });
+
+                    document.getElementById('modal-ticket').style.display = 'flex';
+                } else {
+                    // Por si FastAPI rechaza los datos de nuevo, mostramos el error exacto
+                    let errorDetalle = resultado.error || JSON.stringify(resultado.detail) || "Error desconocido";
+                    alert("Error al registrar: " + errorDetalle);
+                }
+            } catch (error) { console.error("Error:", error); }
+        }
+
+        function cerrarTicket() {
+            document.getElementById('modal-ticket').style.display = 'none';
+            carrito = [];
+            actualizarPantallaTicket();
+            document.getElementById('codigo').focus();
+        }
+
+
+        // 3. LÓGICA DE COBRO (EFECTIVO Y TARJETA)
+        var datosCajaEfectivo = { recibido: 0, cambio: 0 };
+
+        function prepararCobroEfectivo() {
+            if (carrito.length === 0) return alert("El ticket está vacío.");
+            document.getElementById('efectivo-total').innerText = total.toFixed(2);
+            document.getElementById('efectivo-recibido').value = '';
+            document.getElementById('efectivo-cambio').innerText = '0.00';
+            document.getElementById('btn-confirmar-efectivo').disabled = true;
+            document.getElementById('btn-confirmar-efectivo').style.opacity = '0.5';
+            
+            document.getElementById('modal-efectivo').style.display = 'flex';
+            setTimeout(() => document.getElementById('efectivo-recibido').focus(), 100);
+        }
+
+        function calcularCambio() {
+            const recibido = parseFloat(document.getElementById('efectivo-recibido').value) || 0;
+            const cambio = recibido - total;
+            document.getElementById('efectivo-cambio').innerText = cambio > 0 ? cambio.toFixed(2) : "0.00";
+            
+            const btn = document.getElementById('btn-confirmar-efectivo');
+            if (cambio < 0) {
+                btn.disabled = true; btn.style.opacity = '0.5';
+            } else {
+                btn.disabled = false; btn.style.opacity = '1';
+            }
+        }
+
+        function cerrarModalEfectivo() {
+            document.getElementById('modal-efectivo').style.display = 'none';
+        }
+
+        function confirmarEfectivo() {
+            const recibido = parseFloat(document.getElementById('efectivo-recibido').value) || 0;
+            const cambio = recibido - total;
+            datosCajaEfectivo = { recibido: recibido, cambio: cambio };
+            cerrarModalEfectivo();
+            ejecutarVenta('efectivo');
+        }
+
+        async function ejecutarVenta(metodoPago) {
+            if (carrito.length === 0) return alert("El ticket está vacío.");
+
+            let totalCobrado = metodoPago === 'tarjeta' ? (total * 1.04) : total;
+
+            const datosVenta = {
+                id_empleado: usuarioActivo.id_usuario, 
+                total: parseFloat(totalCobrado.toFixed(2)),
+                metodo_pago: metodoPago,
+                items: carrito.map(item => ({ codigo: item.codigo, cantidad: item.cantidad, precio: item.precio }))
+            };
+
+            try {
+                const respuesta = await fetch('http://127.0.0.1:8000/api/ventas', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(datosVenta)
+                });
+                const resultado = await respuesta.json();
+
+                if (resultado.exito) {
+                    // Llenar ticket
+                    document.getElementById('ticket-fecha').innerText = new Date().toLocaleString();
+                    document.getElementById('ticket-cajero').innerText = usuarioActivo.nombre;
+                    document.getElementById('ticket-id').innerText = resultado.id_venta;
+                    document.getElementById('ticket-metodo').innerText = metodoPago.toUpperCase();
+                    document.getElementById('ticket-total').innerText = parseFloat(totalCobrado).toFixed(2);
+                    
+                    if (metodoPago === 'efectivo') {
+                        document.getElementById('ticket-desglose-efectivo').style.display = 'block';
+                        document.getElementById('ticket-recibido').innerText = datosCajaEfectivo.recibido.toFixed(2);
+                        document.getElementById('ticket-cambio').innerText = datosCajaEfectivo.cambio.toFixed(2);
+                    } else {
+                        document.getElementById('ticket-desglose-efectivo').style.display = 'none';
+                    }
+
+                    const tbodyTicket = document.getElementById('ticket-items');
+                    tbodyTicket.innerHTML = '';
+                    carrito.forEach(item => {
+                        let subtotal = item.precio * item.cantidad;
+                        tbodyTicket.innerHTML += `
+                            <tr>
+                                <td style="border: none; padding: 2px 0;">${item.cantidad}x ${item.nombre.substring(0,12)}</td>
+                                <td style="border: none; padding: 2px 0; text-align: right;">$${subtotal.toFixed(2)}</td>
+                            </tr>
+                        `;
+                    });
+                    document.getElementById('modal-ticket').style.display = 'flex';
+                } else alert("Error al registrar: " + resultado.error);
+            } catch (error) { console.error("Error:", error); }
+        }
+
+        function cerrarTicket() {
+            document.getElementById('modal-ticket').style.display = 'none';
+            carrito = [];
+            actualizarPantallaTicket();
+            document.getElementById('codigo').focus();
+        }
+
+        // 4. BUZÓN DE QUEJAS
+        function abrirBuzon() {
+            document.getElementById('texto-buzon').value = '';
+            document.getElementById('modal-buzon').style.display = 'flex';
+        }
+
+        async function enviarQueja() {
+            const texto = document.getElementById('texto-buzon').value.trim();
+            if (!texto) return alert("El mensaje está vacío.");
+
+            try {
+                const res = await fetch('http://127.0.0.1:8000/api/buzon', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mensaje: texto })
+                });
+                const r = await res.json();
+                if (r.exito) {
+                    alert("Mensaje enviado de forma anónima a administración. ¡Gracias!");
+                    document.getElementById('modal-buzon').style.display = 'none';
+                } else alert("Error al enviar.");
+            } catch (error) { console.error("Error:", error); }
+        }
+
+        // 5. CORTE DE CAJA (Igual que antes)
+async function generarCorte() {
+            try {
+                // Aquí agregamos la comilla invertida ( ` ) antes de http y al final
+                const respuesta = await fetch(`http://127.0.0.1:8000/api/corte/${usuarioActivo.id_usuario}`);
+                const resultado = await respuesta.json();
+                
+                if (resultado.exito) {
+                    const d = resultado.corte;
+                    const mensaje = `
+=================================
+       CORTE DE CAJA (HOY)
+=================================
+Cajero: ${usuarioActivo.nombre}
+🎫 Tickets cobrados: ${d.total_tickets}
+💵 EFECTIVO EN CAJÓN: $${parseFloat(d.total_efectivo).toFixed(2)}
+💳 EN TERMINAL (TDC): $${parseFloat(d.total_tarjeta).toFixed(2)}
+---------------------------------
+TOTAL INGRESOS: $${(parseFloat(d.total_efectivo) + parseFloat(d.total_tarjeta)).toFixed(2)}
+=================================`;
+                    alert(mensaje);
+                }
+            } catch (error) { console.error("Error:", error); }
+        }
+    </script>
+</body>
+</html>

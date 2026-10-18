@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Administración - PDV</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background-color: #f4f7f6; margin: 0; }
+        .header { display: flex; justify-content: space-between; align-items: center; background: #343a40; color: white; padding: 15px 25px; border-radius: 5px; margin-bottom: 20px; }
+        .header button { background: #dc3545; color: white; border: none; padding: 8px 15px; cursor: pointer; border-radius: 3px; font-weight: bold; }
+        
+        .panel-container { display: flex; gap: 20px; align-items: flex-start; }
+        .formulario { background: white; padding: 20px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .inventario { background: white; padding: 20px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        
+        .input-group { margin-bottom: 15px; }
+        .input-group label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 14px; }
+        .input-group input, .input-group select { width: 90%; padding: 8px; border: 1px solid #ccc; border-radius: 3px; box-sizing: border-box; }
+        .btn-guardar { width: 100%; padding: 10px; background-color: #28a745; color: white; border: none; cursor: pointer; border-radius: 3px; font-weight: bold; margin-top: 10px; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; font-size: 14px; }
+        th { background-color: #007bff; color: white; position: sticky; top: 0; z-index: 1; }
+        
+.panel-container { display: flex; gap: 20px; align-items: stretch; margin-bottom: 20px; }
+        .formulario { background: white; padding: 20px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+        .inventario { background: white; padding: 20px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: flex; flex-direction: column; flex-grow: 1; }
+        
+        /* Contenedor con Scroll para las tablas largas */
+        .table-wrapper {
+            flex-grow: 1;
+            max-height: 350px; /* Altura fija para que el scroll se active */
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+/* Modal Ticket Admin */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); align-items: center; justify-content: center; z-index: 1000; }
+        .ticket-contenido { background: white; padding: 20px; width: 300px; font-family: 'Courier New', Courier, monospace; font-size: 14px; color: black; }
+        @media print {
+            body * { visibility: hidden; }
+            #area-impresion, #area-impresion * { visibility: visible; }
+            #area-impresion { position: absolute; left: 0; top: 0; width: 100%; padding: 0; margin: 0; }
+            .no-imprimir { display: none !important; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- ========================================== -->
+    <!-- ENCABEZADO DEL ADMIN                       -->
+    <!-- ========================================== -->
+    <div class="header">
+        <h2>Panel de Administración - <span id="nombre-admin" style="color: #17a2b8;"></span></h2>
+        <div>
+            <button onclick="hacerCorteGeneral()" style="background-color: #ffc107; color: black; margin-right: 10px;">Cortar el Día</button>
+            <button onclick="cerrarSesion()">Cerrar Sesión</button>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!--          MÓDULO DE INVENTARIO              -->
+    <!-- ========================================== -->
+    <div class="panel-container">
+        <div class="formulario" style="width: 30%;">
+            <h3>Agregar Nuevo Producto</h3>
+            <div class="input-group"><label>Código de Barras:</label><input type="text" id="form-codigo"></div>
+            <div class="input-group"><label>Nombre del Producto:</label><input type="text" id="form-nombre"></div>
+            <div class="input-group"><label>Descripción:</label><input type="text" id="form-desc"></div>
+            <div class="input-group"><label>Costo de Compra ($):</label><input type="number" id="form-costo" step="0.01"></div>
+            <div class="input-group"><label>Precio de Venta ($):</label><input type="number" id="form-precio" step="0.01"></div>
+            <div class="input-group"><label>Stock Inicial:</label><input type="number" id="form-stock"></div>
+            <button class="btn-guardar" onclick="guardarProducto()">Guardar Producto</button>
+        </div>
+
+        <div class="inventario" style="width: 70%;">
+            <h3>Inventario Actual</h3>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr><th>Código</th><th>Nombre</th><th>Descripción</th><th>Costo</th><th>Precio</th><th>Stock</th><th>Acciones</th></tr>
+                    </thead>
+                    <tbody id="tabla-productos"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <hr style="margin: 40px 0; border: 1px solid #ccc;">
+    
+    <!-- ========================================== -->
+    <!--       MÓDULO DE RECURSOS HUMANOS           -->
+    <!-- ========================================== -->
+    <h2 style="color: #333;">Módulo de Recursos Humanos</h2>
+    <div class="panel-container">
+        <div class="formulario" style="width: 30%;">
+            <h3>Alta de Personal</h3>
+            <div class="input-group"><label>Nombre del Empleado:</label><input type="text" id="form-user-nombre"></div>
+            <div class="input-group"><label>Contraseña:</label><input type="password" id="form-user-pass"></div>
+            <div class="input-group">
+                <label>Rol:</label>
+                <select id="form-user-rol"><option value="empleado">Empleado (Cajero)</option><option value="admin">Administrador</option></select>
+            </div>
+            <button class="btn-guardar" style="background-color: #007bff;" onclick="guardarUsuario()">Registrar Personal</button>
+        </div>
+
+        <div class="inventario" style="width: 70%;">
+            <h3>Plantilla Actual</h3>
+            <div class="table-wrapper">
+                <table>
+                    <thead><tr><th>ID</th><th>Nombre</th><th>Rol</th><th>Acción</th></tr></thead>
+                    <tbody id="tabla-usuarios"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <hr style="margin: 40px 0; border: 1px solid #ccc;">
+
+ <!-- ========================================== -->
+    <!--          MÓDULO DE ESTADÍSTICAS            -->
+    <!-- ========================================== -->
+<div style="display: flex; justify-content: space-between; align-items: center;">
+        <h2 style="color: #333;">Estadísticas y Reportes</h2>
+        <button onclick="abrirReporteMensual()" style="background-color: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 16px;">📊 Abrir Reporte Mensual Completo</button>
+    </div>   
+    <!-- Fila 1: Ventas y Desempeño -->
+    <div class="panel-container" style="margin-bottom: 20px;">
+        <div class="inventario" style="width: 50%;">
+            <h3>Desempeño por Empleado</h3>
+            <div class="table-wrapper">
+                <table>
+                    <thead><tr><th>Empleado</th><th>Tickets</th><th>Recaudado</th></tr></thead>
+                    <tbody id="tabla-reportes"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="inventario" style="width: 50%;">
+            <h3>Ventas (Últimos 7 Días)</h3>
+            <div class="table-wrapper">
+                <table>
+                    <thead><tr><th>Fecha</th><th>Tickets</th><th>Ingresos</th></tr></thead>
+                    <tbody id="tabla-historial"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fila 2: Gastos -->
+    <div class="panel-container">
+        <!-- Nueva Tabla de Gastos -->
+        <div class="inventario" style="width: 70%;">
+            <h3>Historial de Gastos (Últimos 7 Días)</h3>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Fecha y Hora</th>
+                            <th>Concepto</th>
+                            <th>Registró</th>
+                            <th>Monto</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-gastos">
+                        <!-- El historial de gastos se inyectará aquí -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- MÓDULO DE GASTOS -->
+        <div class="formulario" style="width: 30%; background-color: #fff3cd; border: 1px solid #ffeeba;">
+            <h3 style="color: #856404; font-size: 16px;">Registrar Gasto (Salida)</h3>
+            <div class="input-group">
+                <label>Concepto (Ej. Agua):</label>
+                <input type="text" id="form-gasto-desc">
+            </div>
+            <div class="input-group">
+                <label>Monto Retirado ($):</label>
+                <input type="number" id="form-gasto-monto" step="0.5">
+            </div>
+            <button class="btn-guardar" style="background-color: #ffc107; color: black;" onclick="registrarGasto()">Guardar Salida</button>
+        </div>
+    </div>
+
+
+<hr style="margin: 40px 0; border: 1px solid #ccc;">
+
+    <!-- ========================================== -->
+    <!--       MÓDULO DE TICKETS Y BUZÓN            -->
+    <!-- ========================================== -->
+    <h2 style="color: #333;">Auditoría y Atención</h2>
+    <div class="panel-container" style="margin-bottom: 50px;">
+        
+        <!-- Tickets de las últimas 6 horas -->
+        <div class="inventario" style="width: 60%;">
+            <h3>Tickets Recientes (Últimas 6 Horas) ⏳</h3>
+            <p style="font-size: 12px; color: #666; margin-top: -10px;">Monitor de seguridad para auditoría de ventas recientes.</p>
+            <div class="table-wrapper">
+                <table>
+                    <thead><tr><th>Venta #</th><th>Fecha/Hora</th><th>Cajero</th><th>Total</th><th>Acciones</th></tr></thead>
+                    <tbody id="tabla-tickets"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Buzón de Quejas -->
+        <div class="inventario" style="width: 40%; background-color: #f8f9fa;">
+            <h3>Buzón Anónimo 📥</h3>
+            <div class="table-wrapper">
+                <table>
+                    <thead><tr><th>Fecha</th><th>Mensaje</th></tr></thead>
+                    <tbody id="tabla-buzon"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+<!-- MODAL: TICKET DIGITAL REIMPRESIÓN (ADMIN) -->
+    <div class="modal-overlay" id="modal-ticket-admin">
+        <div class="ticket-contenido" id="area-impresion">
+            <h2 style="margin: 0; text-align: center;">MI TIENDA</h2>
+            <p style="margin: 5px 0; font-size: 12px; text-align: center;">Reimpresión / Auditoría</p>
+            <p style="margin: 5px 0; font-size: 12px;">Fecha: <span id="ticket-fecha"></span></p>
+            <p style="margin: 5px 0; font-size: 12px;">Cajero: <span id="ticket-cajero"></span></p>
+            <p style="margin: 5px 0; font-size: 12px;">Venta #: <span id="ticket-id"></span></p>
+            
+            <hr style="border-top: 1px dashed black; margin: 10px 0;">
+            <table style="width: 100%; font-size: 12px; margin-top: 0; border: none;">
+                <tbody id="ticket-items"></tbody>
+            </table>
+            <hr style="border-top: 1px dashed black; margin: 10px 0;">
+            
+            <h3 style="margin: 5px 0; text-align: right;">TOTAL: $<span id="ticket-total"></span></h3>
+            <p style="font-size: 12px; text-align: right; margin: 0;">Método: <span id="ticket-metodo"></span></p>
+            
+            <div class="no-imprimir" style="margin-top: 20px; display: flex; justify-content: space-between;">
+                <button onclick="window.print()" style="background: #007bff; color: white; border: none; padding: 10px; cursor: pointer; font-weight: bold;">🖨️ Imprimir</button>
+                <button onclick="document.getElementById('modal-ticket-admin').style.display='none'" style="background: #dc3545; color: white; border: none; padding: 10px; cursor: pointer; font-weight: bold;">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+<!-- MODAL: TICKET DE CORTE / REPORTE -->
+    <div class="modal-overlay" id="modal-ticket-reporte">
+        <div class="ticket-contenido" id="area-impresion-reporte">
+            <h2 style="margin: 0; text-align: center;">MI TIENDA</h2>
+            <p style="margin: 5px 0; font-size: 14px; text-align: center; font-weight: bold;" id="tk-rep-titulo">CORTE DE CAJA</p>
+            <p style="margin: 5px 0; font-size: 12px;">Admin: <span id="tk-rep-admin"></span></p>
+            <p style="margin: 5px 0; font-size: 12px;">Fecha: <span id="tk-rep-fecha"></span></p>
+            
+            <hr style="border-top: 1px dashed black; margin: 10px 0;">
+            <div id="tk-rep-cuerpo" style="font-size: 12px; white-space: pre-wrap;"></div>
+            <hr style="border-top: 1px dashed black; margin: 10px 0;">
+            
+                     <div style="text-align: right;">
+                <p style="margin: 2px 0; font-size: 13px;">Neto Efectivo: $<span id="tk-rep-neto-efectivo"></span></p>
+                <p style="margin: 2px 0; font-size: 13px;">En Terminales: $<span id="tk-rep-neto-tarjeta"></span></p>
+                <h3 style="margin: 5px 0; font-size: 16px;">TOTAL NETO: $<span id="tk-rep-total-final"></span></h3>
+            </div>
+            
+            <div class="no-imprimir" style="margin-top: 20px; display: flex; justify-content: space-between;">
+                <button onclick="window.print()" style="background: #007bff; color: white; border: none; padding: 10px; cursor: pointer; font-weight: bold;">🖨️ Imprimir Ticket</button>
+                <button onclick="document.getElementById('modal-ticket-reporte').style.display='none'" style="background: #dc3545; color: white; border: none; padding: 10px; cursor: pointer; font-weight: bold;">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+<!-- MODAL: REPORTE MENSUAL -->
+    <div class="modal-overlay" id="modal-reporte-mensual">
+        <div class="modal-contenido" style="width: 800px; max-height: 90vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 20px;">
+                <h2 style="margin: 0; color: #007bff;">Balance Mensual: <span id="rep-mes-titulo"></span></h2>
+                <div>
+                    <button onclick="cambiarMes(-1)" style="padding: 5px 10px; cursor: pointer;">⬅️ Mes Anterior</button>
+                    <button onclick="cambiarMes(1)" style="padding: 5px 10px; cursor: pointer;">Mes Siguiente ➡️</button>
+                    <button onclick="document.getElementById('modal-reporte-mensual').style.display='none'" style="padding: 5px 10px; background: #dc3545; color: white; border: none; cursor: pointer; margin-left: 15px;">Cerrar</button>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 20px; margin-bottom: 20px;">
+                <!-- Tarjeta Ingresos -->
+                <div style="flex: 1; background: #e8f5e9; padding: 15px; border-radius: 5px; border-left: 5px solid #28a745;">
+                    <h3 style="margin: 0 0 10px 0; color: #155724;">Ingresos Brutos (+)</h3>
+                    <p style="font-size: 24px; font-weight: bold; margin: 0; color: #28a745;">$<span id="rep-ingresos">0.00</span></p>
+                    <p style="font-size: 12px; margin: 5px 0 0 0; color: #666;">Efectivo: $<span id="rep-efectivo">0.00</span> | Tarjeta: $<span id="rep-tarjeta">0.00</span></p>
+                </div>
+                <!-- Tarjeta Gastos -->
+                <div style="flex: 1; background: #f8d7da; padding: 15px; border-radius: 5px; border-left: 5px solid #dc3545;">
+                    <h3 style="margin: 0 0 10px 0; color: #721c24;">Gastos Operativos (-)</h3>
+                    <p style="font-size: 24px; font-weight: bold; margin: 0; color: #dc3545;">$<span id="rep-gastos">0.00</span></p>
+                    <p style="font-size: 12px; margin: 5px 0 0 0; color: #666;">Salidas de caja registradas</p>
+                </div>
+                <!-- Tarjeta Utilidad -->
+                <div style="flex: 1; background: #cce5ff; padding: 15px; border-radius: 5px; border-left: 5px solid #004085;">
+                    <h3 style="margin: 0 0 10px 0; color: #004085;">Balance Neto (=)</h3>
+                    <p style="font-size: 24px; font-weight: bold; margin: 0; color: #004085;">$<span id="rep-balance">0.00</span></p>
+                    <p style="font-size: 12px; margin: 5px 0 0 0; color: #666;">Utilidad del mes consultado</p>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 20px;">
+                <div style="flex: 1;">
+                    <h4 style="margin-bottom: 5px;">Desglose por Cajeros (<span id="rep-tickets">0</span> tickets)</h4>
+                    <table style="width: 100%; font-size: 12px;">
+                        <thead><tr><th>Cajero</th><th>Tickets</th><th>Recaudado</th></tr></thead>
+                        <tbody id="rep-tabla-cajeros"></tbody>
+                    </table>
+                </div>
+                <div style="flex: 1;">
+                    <h4 style="margin-bottom: 5px;">Detalle de Gastos</h4>
+                    <table style="width: 100%; font-size: 12px;">
+                        <thead><tr><th>Fecha</th><th>Concepto</th><th>Monto</th></tr></thead>
+                        <tbody id="rep-tabla-gastos"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!--               LÓGICA JAVASCRIPT            -->
+    <!-- ========================================== -->
+     <script>
+        const usuarioGuardado = sessionStorage.getItem('usuarioActivo');
+        let admin; 
+
+        if (!usuarioGuardado) {
+            window.location.href = 'login.html';
+        } else {
+            admin = JSON.parse(usuarioGuardado); 
+            if (admin.rol !== 'admin') {
+                alert("Acceso denegado. Solo administradores pueden ver este panel.");
+                window.location.href = 'login.html';
+            }
+            document.getElementById('nombre-admin').innerText = admin.nombre;
+        }
+
+        function cerrarSesion() {
+            sessionStorage.removeItem('usuarioActivo');
+            window.location.href = 'login.html';
+        }
+
+        // --- INVENTARIO ---
+        async function cargarProductos() {
+            try {
+                const respuesta = await fetch('http://127.0.0.1:8000/api/productos');
+                const datos = await respuesta.json();
+                const tbody = document.getElementById('tabla-productos');
+                tbody.innerHTML = ''; 
+
+                datos.productos.forEach(producto => {
+                    const fila = document.createElement('tr');
+                    
+                    if (producto.stock === 0) {
+                        fila.style.backgroundColor = '#f8d7da'; 
+                    } else if (producto.stock <= 5) {
+                        fila.style.backgroundColor = '#fff3cd'; 
+                    }
+
+                    fila.innerHTML = `
+                        <td>${producto.codigo_barras}</td>
+                        <td>${producto.nombre}</td>
+                        <td>${producto.descripcion}</td>
+                        <td>$${producto.costo}</td>
+                        <td>$${producto.precio_venta}</td>
+                        <td style="font-size: 16px;"><strong>${producto.stock}</strong></td>
+                        <td style="display: flex; flex-direction: column; gap: 5px;">
+                            <button style="background-color: #17a2b8; padding: 5px; font-size: 12px; color: white; border: none; border-radius: 3px; cursor: pointer;" onclick="sumarStock('${producto.codigo_barras}')">+ Stock</button>
+                            <button style="background-color: #dc3545; padding: 5px; font-size: 12px; color: white; border: none; border-radius: 3px; cursor: pointer;" onclick="restarStock('${producto.codigo_barras}', ${producto.stock})">- Stock</button>
+                            <button style="background-color: #ffc107; padding: 5px; font-size: 12px; border: none; border-radius: 3px; cursor: pointer; color: black; font-weight: bold;" onclick="cambiarPrecio('${producto.codigo_barras}', ${producto.precio_venta})">💲 Precio</button>
+                        </td>
+                    `;
+                    tbody.appendChild(fila);
+                });
+            } catch (error) { console.error("Error:", error); }
+        }
+
+        async function guardarProducto() {
+            const nuevo = {
+                codigo_barras: document.getElementById('form-codigo').value,
+                nombre: document.getElementById('form-nombre').value,
+                descripcion: document.getElementById('form-desc').value,
+                costo: parseFloat(document.getElementById('form-costo').value),
+                precio_venta: parseFloat(document.getElementById('form-precio').value),
+                stock: parseInt(document.getElementById('form-stock').value)
+            };
+
+            if (!nuevo.codigo_barras || !nuevo.nombre || isNaN(nuevo.precio_venta)) {
+                alert("Por favor llena al menos el Código, Nombre y Precio de Venta."); return;
+            }
+
+            try {
+                const res = await fetch('http://127.0.0.1:8000/api/productos', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(nuevo)
+                });
+                const resultado = await res.json();
+                if (resultado.exito) {
+                    alert("¡Producto agregado al inventario!");
+                    document.querySelectorAll('.formulario input').forEach(input => input.value = ''); 
+                    cargarProductos();
+                } else alert("Error: " + resultado.mensaje);
+            } catch (error) { console.error("Error:", error); }
+        }
+
+        async function sumarStock(codigo) {
+            const cant = prompt(`¿Cuántas unidades vas a SUMAR al producto ${codigo}?`);
+            if (!cant) return;
+            const cantidad = parseInt(cant);
+            if (isNaN(cantidad) || cantidad <= 0) return alert("Ingresa un número válido mayor a cero.");
+            await actualizarStock(codigo, cantidad);
+        }
+
+        async function restarStock(codigo, stockActual) {
+            const cant = prompt(`¿Cuántas unidades vas a RESTAR al producto ${codigo}?`);
+            if (!cant) return;
+            const cantidad = parseInt(cant);
+            if (isNaN(cantidad) || cantidad <= 0) return alert("Ingresa un número válido mayor a cero.");
+            if (cantidad > stockActual) return alert(`Error: Solo tienes ${stockActual} unidades disponibles.`);
+            await actualizarStock(codigo, -cantidad);
+        }
+
+        async function actualizarStock(codigo, cantidad) {
+            try {
+                const res = await fetch(`http://127.0.0.1:8000/api/productos/${codigo}/stock`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cantidad_a_sumar: cantidad }) 
+                });
+                const r = await res.json();
+                if (r.exito) cargarProductos();
+                else alert("Error: " + r.mensaje);
+            } catch (error) { console.error("Error:", error); }
+        }
+
+        async function cambiarPrecio(codigo, precioActual) {
+            const p = prompt(`El precio actual es $${precioActual}.\nIngresa el NUEVO precio:`);
+            if (!p) return;
+            const nuevoPrecio = parseFloat(p);
+            if (isNaN(nuevoPrecio) || nuevoPrecio < 0) return alert("Precio inválido. No puede ser negativo.");
+            try {
+                const res = await fetch(`http://127.0.0.1:8000/api/productos/${codigo}/precio`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nuevo_precio: nuevoPrecio })
+                });
+                const r = await res.json();
+                if (r.exito) cargarProductos();
+                else alert("Error: " + r.mensaje);
+            } catch (error) { console.error("Error:", error); }
+        }
+
+        // --- RECURSOS HUMANOS ---
+        async function cargarUsuarios() {
+            try {
+                const res = await fetch('http://127.0.0.1:8000/api/usuarios');
+                const datos = await res.json();
+                const tbody = document.getElementById('tabla-usuarios');
+                tbody.innerHTML = ''; 
+
+                datos.usuarios.forEach(user => {
+                    const fila = document.createElement('tr');
+                    
+                    // Aquí estaba el error. Ya agregué las comillas invertidas a los botones.
+                    let botonesAccion = (user.id_usuario === admin.id_usuario) 
+                        ? `<span style="color: gray; font-size: 13px; font-weight: bold;">(Tu usuario)</span>` 
+                        : `<button style="background-color: #ffc107; padding: 5px 10px; font-size: 12px; color: black; font-weight: bold; border: none; border-radius: 3px; cursor: pointer; margin-right: 5px;" onclick="resetearPassword(${user.id_usuario}, '${user.nombre}')">🔑 Clave</button>` +
+                          `<button style="background-color: #dc3545; padding: 5px 10px; font-size: 12px; color: white; border: none; border-radius: 3px; cursor: pointer;" onclick="darDeBaja(${user.id_usuario}, '${user.nombre}')">Dar de Baja</button>`;
+                    
+                    fila.innerHTML = `
+                        <td>${user.id_usuario}</td>
+                        <td>${user.nombre}</td>
+                        <td style="text-transform: capitalize;">${user.rol}</td>
+                        <td>${botonesAccion}</td>
+                    `;
+                    tbody.appendChild(fila);
+                });
+            } catch (error) { console.error("Error:", error); }
+        }
+
+        async function guardarUsuario() {
+            const nombre = document.getElementById('form-user-nombre').value;
+            const password = document.getElementById('form-user-pass').value;
+            const rol = document.getElementById('form-user-rol').value;
+
+            if (!nombre || !password) return alert("Llena el nombre y contraseña para continuar.");
+
+            try {
+                const res = await fetch('http://127.0.0.1:8000/api/usuarios', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nombre, password, rol })
+                });
+                const r = await res.json();
+                if (r.exito) {
+                    alert(r.mensaje);
+                    document.getElementById('form-user-nombre').value = '';
+                    document.getElementById('form-user-pass').value = '';
+                    cargarUsuarios(); 
+                } else alert("Error: " + r.mensaje);
+            } catch (error) { console.error("Error:", error); }
+        }
+
+        async function darDeBaja(id, nombre) {
+            if (!confirm(`¿Estás SEGURO de dar de baja a: ${nombre}? Esta acción es irreversible.`)) return;
+            try {
+                const res = await fetch(`http://127.0.0.1:8000/api/usuarios/${id}`, { method: 'DELETE' });
+                const r = await res.json();
+                if (r.exito) cargarUsuarios();
+                else alert(r.mensaje);
+            } catch (error) { console.error("Error:", error); }
+        }
+
+        async function resetearPassword(id, nombre) {
+            const nuevaClave = prompt(`Ingresa la NUEVA CONTRASEÑA para el cajero: ${nombre}`);
+            
+            if (!nuevaClave) return; 
+
+            try {
+                const res = await fetch(`http://127.0.0.1:8000/api/usuarios/${id}/password`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: nuevaClave })
+                });
+                const r = await res.json();
+                
+                if (r.exito) {
+                    alert(`¡Éxito! La contraseña de ${nombre} ha sido actualizada. Ya puede iniciar sesión.`);
+                } else {
+                    alert("Hubo un error: " + r.error);
+                }
+            } catch (error) { 
+                console.error("Error:", error); 
+                alert("Error de conexión al cambiar contraseña.");
+            }
+        }
+
+        // --- ESTADÍSTICAS Y GASTOS ---
+        async function cargarReportes() {
+            try {
+                const res = await fetch('http://127.0.0.1:8000/api/reportes/ventas');
+                const datos = await res.json();
+                const tbody = document.getElementById('tabla-reportes');
+                tbody.innerHTML = ''; 
+
+                datos.reporte.forEach(fila => {
+                    const tr = document.createElement('tr');
+                    const monto = parseFloat(fila.monto_recaudado);
+                    tr.innerHTML = `
+                        <td style="font-size: 15px;">${fila.nombre}</td>
+                        <td style="font-size: 15px;">${fila.total_tickets} ventas</td>
+                        <td style="color: #28a745; font-weight: bold; font-size: 16px;">$${monto.toFixed(2)}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (error) { console.error("Error:", error); }
+        }
+
+async function cargarHistorialVentas() {
+            try {
+                const res = await fetch('http://127.0.0.1:8000/api/reportes/historial');
+                const datos = await res.json();
+                const tbody = document.getElementById('tabla-historial');
+                tbody.innerHTML = ''; 
+
+                if (datos.exito && datos.historial.length > 0) {
+                    datos.historial.forEach(dia => {
+                        const tr = document.createElement('tr');
+                        const monto = parseFloat(dia.total_ingresos);
+                        tr.innerHTML = '<td style="font-size: 15px; font-weight: bold; color: #555;">' + dia.fecha + '</td>' +
+                                       '<td style="font-size: 15px;">' + dia.total_tickets + ' ventas</td>' +
+                                       '<td style="color: #007bff; font-weight: bold; font-size: 16px;">$' + monto.toFixed(2) + '</td>';
+                        tbody.appendChild(tr);
+                    });
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: gray; padding: 10px;">Sin historial reciente.</td></tr>';
+                }
+            } catch (error) { console.error("Error historial:", error); }
+        }
+        async function cargarHistorialGastos() {
+            try {
+                const res = await fetch('http://127.0.0.1:8000/api/reportes/gastos');
+                const datos = await res.json();
+                const tbody = document.getElementById('tabla-gastos');
+                tbody.innerHTML = ''; 
+
+                if (datos.historial_gastos) {
+                    datos.historial_gastos.forEach(gasto => {
+                        const tr = document.createElement('tr');
+                        const monto = parseFloat(gasto.monto);
+                        tr.innerHTML = `
+                            <td style="font-size: 14px; color: #555;">${gasto.fecha}</td>
+                            <td style="font-size: 14px; font-weight: bold;">${gasto.descripcion}</td>
+                            <td style="font-size: 14px; text-transform: capitalize;">${gasto.usuario}</td>
+                            <td style="color: #dc3545; font-weight: bold; font-size: 15px;">-$${monto.toFixed(2)}</td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                }
+            } catch (error) { console.error("Error al cargar gastos:", error); }
+        }
+
+        async function registrarGasto() {
+            const desc = document.getElementById('form-gasto-desc').value;
+            const monto = parseFloat(document.getElementById('form-gasto-monto').value);
+
+            if (!desc || isNaN(monto) || monto <= 0) {
+                alert("Ingresa un concepto y un monto válido."); return;
+            }
+
+            try {
+                const res = await fetch('http://127.0.0.1:8000/api/gastos', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id_usuario: admin.id_usuario, descripcion: desc, monto: monto })
+                });
+                const r = await res.json();
+                
+                // Aquí estaba el error duplicado, ya quedó limpio y único
+                if (r.exito) {
+                    alert("Salida de dinero registrada. Se restará del corte del día.");
+                    document.getElementById('form-gasto-desc').value = '';
+                    document.getElementById('form-gasto-monto').value = '';
+                    cargarHistorialGastos(); 
+                } else {
+                    alert("Error: " + r.error);
+                }
+            } catch (error) { console.error("Error:", error); }
+        }
+
+ 
+        async function hacerCorteGeneral() {
+            try {
+                const res = await fetch('http://127.0.0.1:8000/api/corte-general');
+                const r = await res.json();
+
+                if (r.exito) {
+                    const d = r.corte;
+                    const gastos = parseFloat(r.gastos); 
+                    const efecBruto = parseFloat(d.total_efectivo);
+                    const efecNeto = efecBruto - gastos; // Lo que debe haber físicamente en el cajón
+                    const tarj = parseFloat(d.total_tarjeta);
+                    const global = efecBruto + tarj;
+
+                    let detalle = `🎫 Tickets Emitidos: ${d.total_tickets}\n\n`;
+                    detalle += `--- POR CAJERO ---\n`;
+                    
+                    if (r.desglose_cajeros.length > 0) {
+                        r.desglose_cajeros.forEach(c => {
+                            detalle += `${c.nombre.toUpperCase()}: $${parseFloat(c.recaudado).toFixed(2)}\n`;
+                        });
+                    } else {
+                        detalle += `Sin ventas hoy.\n`;
+                    }
+
+                    // Aclaramos las finanzas en el cuerpo del ticket
+                    detalle += `\n--- FINANZAS ---\n`;
+                    detalle += `Ventas Totales:  $${global.toFixed(2)}\n`;
+                    detalle += `Cobro Efectivo:  $${efecBruto.toFixed(2)}\n`;
+                    detalle += `Cobro Tarjeta:   $${tarj.toFixed(2)}\n`;
+                    detalle += `Gastos/Salidas: -$${gastos.toFixed(2)}\n`;
+
+                    // Llenamos el ticket
+                    document.getElementById('tk-rep-titulo').innerText = "CORTE DEL DÍA (HOY)";
+                    document.getElementById('tk-rep-admin').innerText = admin.nombre;
+                    document.getElementById('tk-rep-fecha').innerText = new Date().toLocaleString();
+                    document.getElementById('tk-rep-cuerpo').innerText = detalle;
+                    
+                    // Llenamos el nuevo bloque de TOTALES finales
+                    const totalNetoFinal = efecNeto + tarj;
+                    document.getElementById('tk-rep-neto-efectivo').innerText = efecNeto.toFixed(2);
+                    document.getElementById('tk-rep-neto-tarjeta').innerText = tarj.toFixed(2);
+                    document.getElementById('tk-rep-total-final').innerText = totalNetoFinal.toFixed(2);
+
+                    // Lo mostramos
+                    document.getElementById('modal-ticket-reporte').style.display = 'flex';
+                }
+            } catch (error) { console.error(error); }
+        }
+
+
+// --- AUDITORÍA Y BUZÓN ---
+        async function cargarBuzon() {
+            try {
+                const res = await fetch('http://127.0.0.1:8000/api/buzon');
+                const datos = await res.json();
+                const tbody = document.getElementById('tabla-buzon');
+                tbody.innerHTML = ''; 
+                if (datos.exito && datos.quejas) {
+                    datos.quejas.forEach(q => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = '<td style="font-size:12px; color:gray; white-space:nowrap;">' + q.fecha + '</td>' +
+                                       '<td style="font-size:14px; font-style:italic;">"' + q.mensaje + '"</td>';
+                        tbody.appendChild(tr);
+                    });
+                }
+            } catch (error) { console.error("Error buzón:", error); }
+        }
+
+async function cargarTicketsRecientes() {
+            try {
+                const res = await fetch('http://127.0.0.1:8000/api/tickets/recientes');
+                const datos = await res.json();
+                const tbody = document.getElementById('tabla-tickets');
+                tbody.innerHTML = ''; 
+                if (datos.exito && datos.tickets) {
+                    datos.tickets.forEach(t => {
+                        const tr = document.createElement('tr');
+                        
+                        let btnVer = '<button style="background-color: #17a2b8; padding: 5px; font-size: 12px; color: white; border: none; border-radius: 3px; cursor: pointer; margin-right: 5px;" onclick="verTicket(' + t.id_venta + ')">👁️ Ver</button>';
+                        let btnCancelar = '<button style="background-color: #dc3545; padding: 5px; font-size: 12px; color: white; border: none; border-radius: 3px; cursor: pointer;" onclick="cancelarTicket(' + t.id_venta + ')">❌ Cancelar</button>';
+                        
+                        tr.innerHTML = '<td><strong>#' + t.id_venta + '</strong></td>' +
+                                       '<td style="font-size:13px;">' + t.fecha + '</td>' +
+                                       '<td style="text-transform: capitalize;">' + t.cajero + '</td>' +
+                                       '<td style="color: #28a745; font-weight: bold;">$' + parseFloat(t.total).toFixed(2) + '</td>' +
+                                       '<td>' + btnVer + btnCancelar + '</td>';
+                        tbody.appendChild(tr);
+                    });
+                }
+            } catch (error) { console.error("Error tickets:", error); }
+        }
+
+async function verTicket(id_venta) {
+            try {
+                const res = await fetch('http://127.0.0.1:8000/api/tickets/' + id_venta);
+                const datos = await res.json();
+                
+                if (datos.exito) {
+                    document.getElementById('ticket-fecha').innerText = datos.ticket.fecha;
+                    document.getElementById('ticket-cajero').innerText = datos.ticket.cajero;
+                    document.getElementById('ticket-id').innerText = datos.ticket.id_venta;
+                    document.getElementById('ticket-metodo').innerText = datos.ticket.metodo_pago.toUpperCase();
+                    document.getElementById('ticket-total').innerText = parseFloat(datos.ticket.total).toFixed(2);
+                    
+                    const tbody = document.getElementById('ticket-items');
+                    tbody.innerHTML = '';
+                    
+                    if(datos.items) {
+                        datos.items.forEach(item => {
+                            tbody.innerHTML += '<tr>' +
+                                '<td style="border: none; padding: 2px 0;">' + item.cantidad + 'x ' + item.nombre.substring(0,15) + '</td>' +
+                                '<td style="border: none; padding: 2px 0; text-align: right;">$' + parseFloat(item.precio_unitario).toFixed(2) + '</td>' +
+                                '</tr>';
+                        });
+                    }
+                    // Mostramos la ventana
+                    document.getElementById('modal-ticket-admin').style.display = 'flex';
+                } else {
+                    alert("Error al cargar ticket: " + datos.error);
+                }
+            } catch(e) { console.error(e); }
+        }
+
+        async function cancelarTicket(id_venta) {
+            const seguro = confirm("⚠️ ¿Estás totalmente seguro de CANCELAR el ticket #" + id_venta + "?\n\nEl dinero se restará del corte y los productos regresarán al inventario de forma automática.");
+            if(!seguro) return;
+            
+            try {
+                const res = await fetch('http://127.0.0.1:8000/api/tickets/' + id_venta, { method: 'DELETE' });
+                const r = await res.json();
+                if (r.exito) {
+                    alert("✅ Ticket cancelado. El dinero se restó y el stock regresó a la normalidad.");
+                    cargarTicketsRecientes(); // Recargamos la tabla de tickets
+                    cargarHistorialVentas();  // Actualizamos el reporte de 7 días
+                    cargarProductos();        // Actualizamos el inventario visualmente
+                } else {
+                    alert("Hubo un error al cancelar: " + r.error);
+                }
+            } catch(e) { console.error(e); }
+        }
+
+        // --- REPORTE MENSUAL FINANCIERO ---
+        let mesActualReporte = new Date().getMonth() + 1; // 1 a 12
+        let anioActualReporte = new Date().getFullYear();
+        const nombresMeses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+
+        function abrirReporteMensual() {
+            // Cada que abrimos, cargamos el mes en el que estamos viviendo
+            mesActualReporte = new Date().getMonth() + 1;
+            anioActualReporte = new Date().getFullYear();
+            cargarDatosMes();
+            document.getElementById('modal-reporte-mensual').style.display = 'flex';
+        }
+
+        function cambiarMes(direccion) {
+            mesActualReporte += direccion;
+            // Si nos pasamos de diciembre, avanzamos de año
+            if (mesActualReporte > 12) {
+                mesActualReporte = 1;
+                anioActualReporte++;
+            }
+            // Si bajamos de enero, retrocedemos de año
+            if (mesActualReporte < 1) {
+                mesActualReporte = 12;
+                anioActualReporte--;
+            }
+            cargarDatosMes();
+        }
+
+        async function cargarDatosMes() {
+            document.getElementById('rep-mes-titulo').innerText = nombresMeses[mesActualReporte - 1] + ' ' + anioActualReporte;
+            
+            try {
+                const url = 'http://127.0.0.1:8000/api/reportes/mensual?mes=' + mesActualReporte + '&anio=' + anioActualReporte;
+                const res = await fetch(url);
+                const datos = await res.json();
+
+                if (datos.exito) {
+                    const ingresos = parseFloat(datos.ventas.total_ingresos);
+                    const gastos = parseFloat(datos.gastos);
+                    const balance = ingresos - gastos;
+
+                    document.getElementById('rep-ingresos').innerText = ingresos.toFixed(2);
+                    document.getElementById('rep-efectivo').innerText = parseFloat(datos.ventas.efectivo).toFixed(2);
+                    document.getElementById('rep-tarjeta').innerText = parseFloat(datos.ventas.tarjeta).toFixed(2);
+                    
+                    document.getElementById('rep-gastos').innerText = gastos.toFixed(2);
+                    document.getElementById('rep-balance').innerText = balance.toFixed(2);
+                    document.getElementById('rep-tickets').innerText = datos.ventas.total_tickets;
+
+                    // Llenar tabla cajeros
+                    const tCajeros = document.getElementById('rep-tabla-cajeros');
+                    tCajeros.innerHTML = '';
+                    if (datos.cajeros.length > 0) {
+                        datos.cajeros.forEach(c => {
+                            tCajeros.innerHTML += '<tr>' +
+                                '<td style="text-transform: capitalize;">' + c.nombre + '</td>' +
+                                '<td>' + c.tickets + '</td>' +
+                                '<td style="color:#28a745; font-weight:bold;">$' + parseFloat(c.recaudado).toFixed(2) + '</td>' +
+                                '</tr>';
+                        });
+                    } else {
+                        tCajeros.innerHTML = '<tr><td colspan="3" style="text-align:center; color:gray;">Sin ventas este mes</td></tr>';
+                    }
+
+                    // Llenar tabla gastos
+                    const tGastos = document.getElementById('rep-tabla-gastos');
+                    tGastos.innerHTML = '';
+                    if (datos.lista_gastos.length > 0) {
+                        datos.lista_gastos.forEach(g => {
+                            tGastos.innerHTML += '<tr>' +
+                                '<td>' + g.fecha + '</td>' +
+                                '<td>' + g.descripcion + '</td>' +
+                                '<td style="color:#dc3545; font-weight:bold;">-$' + parseFloat(g.monto).toFixed(2) + '</td>' +
+                                '</tr>';
+                        });
+                    } else {
+                        tGastos.innerHTML = '<tr><td colspan="3" style="text-align:center; color:gray;">Sin gastos este mes</td></tr>';
+                    }
+
+                } else {
+                    alert("Error al cargar reporte: " + datos.error);
+                }
+            } catch (error) { console.error(error); }
+        }
+
+window.onload = function() {
+            cargarProductos();
+            cargarUsuarios(); 
+            cargarReportes();
+            cargarHistorialVentas();
+            cargarHistorialGastos();
+            cargarBuzon();              // <-- NUEVO
+            cargarTicketsRecientes();   // <-- NUEVO
+        };
+    </script>

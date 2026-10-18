@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - PDV</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #e9ecef; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .login-box { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 350px; text-align: center; }
+        .input-group { margin-bottom: 15px; text-align: left; }
+        .input-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+        .input-group input { width: 93%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
+        button { width: 100%; padding: 10px; background-color: #007bff; color: white; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        .error-msg { color: red; margin-bottom: 15px; display: none; }
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <h2>Bienvenido al PDV</h2>
+        <div id="mensaje-error" class="error-msg"></div>
+        
+        <div class="input-group">
+            <label>Usuario:</label>
+            <input type="text" id="usuario" placeholder="Ej: Cajero 1">
+        </div>
+        <div class="input-group">
+            <label>Contraseña:</label>
+            <input type="password" id="password" placeholder="Tu contraseña">
+        </div>
+        <button onclick="intentarLogin()">Ingresar</button>
+    </div>
+
+    <script>
+        async function intentarLogin() {
+            const usuarioInput = document.getElementById('usuario').value;
+            const passwordInput = document.getElementById('password').value;
+            const mensajeError = document.getElementById('mensaje-error');
+
+            // Validación básica para que no dejen campos vacíos
+            if (!usuarioInput || !passwordInput) {
+                mensajeError.innerText = "Por favor llena ambos campos";
+                mensajeError.style.display = "block";
+                return;
+            }
+
+            try {
+                // Hacemos la petición a nuestra API en Python
+                const respuesta = await fetch('http://127.0.0.1:8000/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nombre: usuarioInput, password: passwordInput })
+                });
+
+                const resultado = await respuesta.json();
+
+                if (resultado.exito) {
+                    // Si el login es correcto, guardamos la sesión en el navegador
+                    sessionStorage.setItem('usuarioActivo', JSON.stringify(resultado.usuario));
+                    
+                    // El "Cadenero": Dependiendo del rol, lo mandamos a su pantalla correspondiente
+                    if (resultado.usuario.rol === 'admin') {
+                        window.location.href = 'index.html'; 
+                    } else {
+                        window.location.href = 'caja.html';
+                    }
+                } else {
+                    // Si la contraseña o usuario están mal, mostramos el error
+                    mensajeError.innerText = resultado.mensaje;
+                    mensajeError.style.display = "block";
+                }
+            } catch (error) {
+                console.error("Error en login:", error);
+                mensajeError.innerText = "Error de conexión. ¿Está encendido el servidor Python?";
+                mensajeError.style.display = "block";
+            }
+        }
+    </script>
+</body>
+</html>
